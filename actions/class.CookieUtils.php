@@ -19,6 +19,8 @@
  * 
  */
 
+use \oat\taoLti\helpers\HeaderParser;
+
 /**
  * A controller to bypass some restrictions on cookies
  * 
@@ -33,18 +35,19 @@ class taoLti_actions_CookieUtils extends tao_actions_CommonModule
      * Redirects the user to his destination if it was
      * or prompts the user to restore the session if it wasn't
      */
-	public function verifyCookie() {
-	    $url = $this->getRequestParameter('redirect');
-	    $session = $this->getRequestParameter('session');
-	    if (session_id() == $session) {
-	        $this->forwardUrl($url);
-	    } else {
-	        $this->setData('session', $session);
-	        $this->setData('redirect', $url);
-	        $this->setView('cookieError.tpl');
-	    }
-	}
-	
+    public function verifyCookie() {
+        $session = HeaderParser::getSessionFromCookie($this->getHeader('Cookie'));
+        $url = $this->getRequestParameter('redirect');
+
+        if (session_id() == $session) {
+            $this->forwardUrl($url);
+        } else {
+            $this->setData('session', $session);
+            $this->setData('redirect', $url);
+            $this->setView('cookieError.tpl');
+        }
+    }
+
 	/**
 	 * Closses the current session, restores the session provided
 	 * in the parameter session, regenerates a new sessionid and
