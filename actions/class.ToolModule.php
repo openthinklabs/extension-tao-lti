@@ -36,22 +36,7 @@ abstract class taoLti_actions_ToolModule extends LtiModule
     {
         try {
             taoLti_models_classes_LtiService::singleton()->startLtiSession(common_http_Request::currentRequest());
-            /** @var CookieVerifyService $cookieService */
-            $cookieService = $this->getServiceManager()->get(CookieVerifyService::SERVICE_ID);
-            if ($cookieService->isVerifyCookieRequired()) {
-                if (tao_models_classes_accessControl_AclProxy::hasAccess('verifyCookie', 'CookieUtils', 'taoLti')) {
-                    $this->redirect(_url('verifyCookie', 'CookieUtils', 'taoLti', [
-                        'session'  => session_id(),
-                        'redirect' => _url('run', null, null, $_GET)]));
-                } else {
-                    throw new taoLti_models_classes_LtiException(
-                        __('You are not authorized to use this system'),
-                        \oat\taoLti\models\classes\LtiMessages\LtiErrorMessage::ERROR_UNAUTHORIZED
-                    );
-                }
-            } else {
-                $this->forward('run', null, null, $_GET);
-            }
+            $this->forward('run', null, null, $_GET);
         } catch (common_user_auth_AuthFailedException $e) {
             common_Logger::i($e->getMessage());
             throw new taoLti_models_classes_LtiException(
