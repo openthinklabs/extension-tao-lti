@@ -20,7 +20,7 @@
  * 
  */
 
-use oat\taoLti\models\classes\LtiIncomingLinkService;
+use oat\taoLti\models\classes\incomingLink\LtiIncomingLinkService;
 
 /**
  * The TAO layer ontop of the LtiSession
@@ -77,7 +77,7 @@ class taoLti_models_classes_TaoLtiSession extends common_session_DefaultSession
      * Returns an resource representing the incoming link
      * 
      * @throws common_exception_Error
-     * @return \oat\taoLti\models\classes\LtiIncomingLink
+     * @return \oat\taoLti\models\classes\incomingLink\LtiIncomingLink
      */
     public function getLtiLinkResource()
     {

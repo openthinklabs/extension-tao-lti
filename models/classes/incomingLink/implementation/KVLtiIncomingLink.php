@@ -18,7 +18,9 @@
  *
  */
 
-namespace oat\taoLti\models\classes;
+namespace oat\taoLti\models\classes\incomingLink\implementation;
+
+use oat\taoLti\models\classes\incomingLink\LtiIncomingLink;
 
 
 /**

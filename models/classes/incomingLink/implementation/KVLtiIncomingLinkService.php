@@ -18,9 +18,11 @@
  *
  */
 
-namespace oat\taoLti\models\classes;
+namespace oat\taoLti\models\classes\incomingLink\implementation;
 
 use oat\oatbox\service\ConfigurableService;
+use oat\taoLti\models\classes\incomingLink\LtiIncomingLink;
+use oat\taoLti\models\classes\incomingLink\LtiIncomingLinkService;
 
 
 /**
@@ -32,7 +34,6 @@ class KVLtiIncomingLinkService extends ConfigurableService implements LtiIncomin
     const OPTION_PERSISTENCE = 'persistence';
 
     const LTI_IL = 'kvil_';
-
 
     /**
      * @var \common_persistence_KeyValuePersistence
@@ -64,8 +65,17 @@ class KVLtiIncomingLinkService extends ConfigurableService implements LtiIncomin
 
     public function spawnLtiLink($consumer, $linkId)
     {
-        new KVLtiIncomingLink($consumer, $linkId);
-        $this->getPersistence()->get(self::LTI_IL . $consumer . $linkId);
+        $incomingLink = new KVLtiIncomingLink($consumer, $linkId);
+        $this->getPersistence()->set(self::LTI_IL . $consumer . $linkId, json_encode($incomingLink));
+
+        return $incomingLink;
+    }
+
+    public function get($ltiLinkIdentifier)
+    {
+        $data = $this->getPersistence()->get(self::LTI_IL . $ltiLinkIdentifier);
+
+        return KVLtiIncomingLink::unSerialize($data);
     }
 
 

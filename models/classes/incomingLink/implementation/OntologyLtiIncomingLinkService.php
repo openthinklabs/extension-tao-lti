@@ -18,9 +18,11 @@
  *
  */
 
-namespace oat\taoLti\models\classes;
+namespace oat\taoLti\models\classes\incomingLink\implementation;
 
 use oat\oatbox\service\ConfigurableService;
+use oat\taoLti\models\classes\incomingLink\LtiIncomingLink;
+use oat\taoLti\models\classes\incomingLink\LtiIncomingLinkService;
 
 
 /**
@@ -74,6 +76,13 @@ class OntologyLtiIncomingLinkService extends ConfigurableService implements LtiI
         ));
 
         $incomingLink = new OntologyLtiIncomingLink($instance->getUri());
+
+        return $incomingLink;
+    }
+
+    public function get($ltiLinkIdentifier)
+    {
+        $incomingLink = new OntologyLtiIncomingLink($ltiLinkIdentifier);
 
         return $incomingLink;
     }
