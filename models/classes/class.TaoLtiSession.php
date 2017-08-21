@@ -20,6 +20,8 @@
  * 
  */
 
+use oat\taoLti\models\classes\LtiIncomingLinkService;
+
 /**
  * The TAO layer ontop of the LtiSession
  *
@@ -75,33 +77,24 @@ class taoLti_models_classes_TaoLtiSession extends common_session_DefaultSession
      * Returns an resource representing the incoming link
      * 
      * @throws common_exception_Error
-     * @return core_kernel_classes_Resource
+     * @return \oat\taoLti\models\classes\LtiIncomingLink
      */
     public function getLtiLinkResource()
     {
         if (is_null($this->ltiLink)) {
-            $class = new core_kernel_classes_Class(CLASS_LTI_INCOMINGLINK);
-            $consumer = taoLti_models_classes_LtiService::singleton()->getLtiConsumerResource($this->getLaunchData());
-            // search for existing resource
-            $instances = $class->searchInstances(array(
-                PROPERTY_LTI_LINK_ID => $this->getLaunchData()->getResourceLinkID(),
-                PROPERTY_LTI_LINK_CONSUMER => $consumer
-            ), array(
-                'like' => false,
-                'recursive' => false
-            ));
-            if (count($instances) > 1) {
-                throw new common_exception_Error('Multiple resources for link ' . $this->getLaunchData()->getResourceLinkID());
-            }
-            if (count($instances) == 1) {
+
+            /** @var LtiIncomingLinkService $ltiIncomingLinkService */
+            $ltiIncomingLinkService = $this->getServiceLocator()->get(LtiIncomingLinkService::SERVICE_ID);
+            $consumer = \taoLti_models_classes_LtiService::singleton()->getLtiConsumerResource($this->getLaunchData());
+            $instance = $ltiIncomingLinkService->getLtiLink($consumer, $this->getLaunchData()->getResourceLinkID());
+
+
+            if (!is_null($instance)) {
                 // use existing link
-                $this->ltiLink = current($instances);
+                $this->ltiLink = $instance;
             } else {
                 // spawn new link
-                $this->ltiLink = $class->createInstanceWithProperties(array(
-					PROPERTY_LTI_LINK_ID		=> $this->getLaunchData()->getResourceLinkID(),
-					PROPERTY_LTI_LINK_CONSUMER	=> $consumer,
-				));
+                $this->ltiLink = $ltiIncomingLinkService->spawnLtiLink($consumer, $this->getLaunchData()->getResourceLinkID());
 			}
 		}
 		return $this->ltiLink;
