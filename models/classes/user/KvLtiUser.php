@@ -58,6 +58,8 @@ class KvLtiUser extends \common_user_User implements ServiceLocatorAwareInterfac
 
     private $label;
 
+    private $userKey;
+
     /**
      * KvLtiUser constructor.
      * @param $data
@@ -71,6 +73,7 @@ class KvLtiUser extends \common_user_User implements ServiceLocatorAwareInterfac
         $this->firstname = isset($data[GenerisRdf::PROPERTY_USER_FIRSTNAME]) ? $data[GenerisRdf::PROPERTY_USER_FIRSTNAME] : null;
         $this->lastname = isset($data[GenerisRdf::PROPERTY_USER_LASTNAME]) ? $data[GenerisRdf::PROPERTY_USER_LASTNAME] : null;
         $this->email = isset($data[GenerisRdf::PROPERTY_USER_MAIL]) ? $data[GenerisRdf::PROPERTY_USER_MAIL] : null;
+        $this->userKey = isset($data[OntologyLtiUserService::PROPERTY_USER_LTIKEY]) ? $data[OntologyLtiUserService::PROPERTY_USER_LTIKEY] : null;
     }
 
     /**
@@ -116,8 +119,11 @@ class KvLtiUser extends \common_user_User implements ServiceLocatorAwareInterfac
             case  GenerisRdf::PROPERTY_USER_MAIL :
                 $returnValue = [new \core_kernel_classes_Literal($this->email)];
                 break;
+            case OntologyLtiUserService::PROPERTY_USER_LTIKEY :
+                $returnValue = [new \core_kernel_classes_Literal($this->userKey)];
+                break;
             default:
-                \common_Logger::d('Unkown property ' . $property . ' requested from ' . __CLASS__);
+                \common_Logger::d('Unknown property ' . $property . ' requested from ' . __CLASS__);
                 $returnValue = array();
         }
         return $returnValue;
@@ -159,6 +165,7 @@ class KvLtiUser extends \common_user_User implements ServiceLocatorAwareInterfac
             GenerisRdf::PROPERTY_USER_LASTNAME => $this->lastname,
             GenerisRdf::PROPERTY_USER_MAIL => $this->email,
             OntologyRdfs::RDFS_LABEL => $this->label,
+            LtiUserService::PROPERTY_USER_LTIKEY => $this->userKey
         ];
     }
 

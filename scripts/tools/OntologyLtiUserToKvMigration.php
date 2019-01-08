@@ -96,6 +96,7 @@ class OntologyLtiUserToKvMigration extends ScriptAction
                     GenerisRdf::PROPERTY_USER_FIRSTNAME => $this->getPropertyValue($properties, GenerisRdf::PROPERTY_USER_FIRSTNAME),
                     GenerisRdf::PROPERTY_USER_LASTNAME => $this->getPropertyValue($properties, GenerisRdf::PROPERTY_USER_LASTNAME),
                     GenerisRdf::PROPERTY_USER_MAIL => $this->getPropertyValue($properties, GenerisRdf::PROPERTY_USER_MAIL),
+                    OntologyLtiUserService::PROPERTY_USER_LTIKEY => $ltiKey,
                 ];
 
                 $kvPersistence = $this->getKeyValuePersistence();
