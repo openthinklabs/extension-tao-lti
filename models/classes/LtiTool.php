@@ -21,7 +21,8 @@
 
 namespace oat\taoLti\models\classes;
 
-use tao_models_classes_Service;
+use oat\oatbox\service\ConfigurableService;
+use oat\oatbox\service\ServiceManager;
 
 /**
  * Abstract service to be implemented by LTI tools
@@ -30,7 +31,7 @@ use tao_models_classes_Service;
  * @package taoLti
  * @package models_classes
  */
-abstract class LtiTool extends tao_models_classes_Service
+abstract class LtiTool extends ConfigurableService
 {
     const PROPERTY_SERVICE = 'http://www.tao.lu/Ontologies/TAOLTI.rdf#ToolService';
 
@@ -41,4 +42,13 @@ abstract class LtiTool extends tao_models_classes_Service
      * @return string
      */
     public abstract function getLaunchUrl($parameters = array());
+
+    /**
+     * @deprecated added for backward compatibility
+     * @return LtiTool
+     */
+    public static function singleton()
+    {
+        return ServiceManager::getServiceManager()->get(static::class);
+    }
 }

@@ -30,8 +30,11 @@ use oat\tao\model\TaoOntology;
 use oat\taoLti\models\classes\LtiMessages\LtiErrorMessage;
 use Psr\Log\LogLevel;
 use tao_models_classes_Service;
+use oat\oatbox\session\SessionService;
+use oat\oatbox\service\ConfigurableService;
+use oat\oatbox\service\ServiceManager;
 
-class LtiService extends tao_models_classes_Service
+class LtiService extends ConfigurableService
 {
     const LIS_CONTEXT_ROLE_NAMESPACE = 'urn:lti:role:ims/lis/';
 
@@ -80,7 +83,7 @@ class LtiService extends tao_models_classes_Service
      */
     public function getLtiSession()
     {
-        $session = common_session_SessionManager::getSession();
+        $session = $this->getServiceLocator()->get(SessionService::class)->getCurrentSession();
         if (!$session instanceof TaoLtiSession) {
             throw new LtiException(__FUNCTION__ . ' called on a non LTI session', LtiErrorMessage::ERROR_SYSTEM_ERROR);
         }
@@ -109,6 +112,15 @@ class LtiService extends tao_models_classes_Service
         }
 
         return current($instances);
+    }
+
+    /**
+     * @deprecated added for backward compatibility
+     * @return LtiTool
+     */
+    public static function singleton()
+    {
+        return ServiceManager::getServiceManager()->get(static::class);
     }
 
     /**
