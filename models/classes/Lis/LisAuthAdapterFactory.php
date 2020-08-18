@@ -15,8 +15,10 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
- * Copyright (c) 2019 (original work) Open Assessment Technologies SA;
+ * Copyright (c) 2019-2020 (original work) Open Assessment Technologies SA;
  */
+
+declare(strict_types=1);
 
 namespace oat\taoLti\models\classes\Lis;
 
@@ -29,11 +31,7 @@ use Psr\Http\Message\ServerRequestInterface;
  */
 class LisAuthAdapterFactory extends ConfigurableService
 {
-    /**
-     * @param ServerRequestInterface $request
-     * @return LisAuthAdapter
-     */
-    public function create(ServerRequestInterface $request)
+    public function create(ServerRequestInterface $request): LisAuthAdapter
     {
         $adapter = new LisAuthAdapter($request);
         return $this->propagate($adapter);
