@@ -49,7 +49,7 @@
           "computer-based-assessment"
      ],
 
-    "name": "oat-sa/extension-tao-lti",
+    "name": "openthinklabs/extension-tao-lti",
     "type" : "tao-extension",
     "extra" : {
     	"tao-extension-name" : "taoLti"
