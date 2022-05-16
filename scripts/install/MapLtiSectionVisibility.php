@@ -27,17 +27,17 @@ class MapLtiSectionVisibility extends AbstractAction
 {
     public function __invoke($params)
     {
-        $this->getServiceManager()->register(
-            SectionVisibilityFilter::SERVICE_ID,
-            new SectionVisibilityFilter(
-                [
-                    SectionVisibilityFilter::OPTION_FEATURE_FLAG_SECTIONS => [
-                        'settings_manage_lti_keys' => [
-                            'FEATURE_FLAG_LTI1P3',
-                        ],
-                    ],
-                ]
-            )
+        $sectionVisibilityFilter = $this->getServiceManager()->get(SectionVisibilityFilter::SERVICE_ID);
+        $featureFlagSections = $sectionVisibilityFilter
+            ->getOption(SectionVisibilityFilter::OPTION_FEATURE_FLAG_SECTIONS);
+        $featureFlagSections['settings_manage_lti_keys'] = ['FEATURE_FLAG_LTI1P3'];
+        $featureFlagSections['settings_metadata_import'] = ['FEATURE_FLAG_STATISTIC_METADATA_IMPORT'];
+
+        $sectionVisibilityFilter->setOption(
+            SectionVisibilityFilter::OPTION_FEATURE_FLAG_SECTIONS,
+            $featureFlagSections
         );
+
+        $this->getServiceManager()->register(SectionVisibilityFilter::SERVICE_ID, $sectionVisibilityFilter);
     }
 }
