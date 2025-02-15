@@ -23,102 +23,139 @@ declare(strict_types=1);
 namespace oat\taoLti\models\classes\Security\DataAccess\Repository;
 
 use common_exception_NoImplementation;
-use ErrorException;
-use League\Flysystem\FilesystemInterface;
 use OAT\Library\Lti1p3Core\Security\Key\Key;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChain;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChainInterface;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChainRepositoryInterface;
+use oat\oatbox\filesystem\FilesystemException;
+use oat\oatbox\filesystem\FilesystemInterface;
 use oat\oatbox\filesystem\FileSystemService;
 use oat\oatbox\service\ConfigurableService;
-use oat\tao\model\security\Business\Domain\Key\KeyChainCollection;
-use oat\tao\model\security\Business\Domain\Key\KeyChainQuery;
 use oat\tao\model\security\Business\Domain\Key\Key as TaoKey;
 use oat\tao\model\security\Business\Domain\Key\KeyChain as TaoKeyChain;
+use oat\tao\model\security\Business\Domain\Key\KeyChainCollection;
+use oat\tao\model\security\Business\Domain\Key\KeyChainQuery;
+use oat\taoLti\models\classes\Exception\PlatformKeyChainException;
 
 class PlatformKeyChainRepository extends ConfigurableService implements KeyChainRepositoryInterface
 {
     public const SERVICE_ID = 'taoLti/PlatformKeyChainRepository';
     public const OPTION_DEFAULT_KEY_ID = 'defaultKeyId';
+    public const OPTION_DEFAULT_KEY_ID_VALUE = 'defaultPlatformKeyId';
     public const OPTION_DEFAULT_KEY_NAME = 'defaultKeyName';
+    public const OPTION_DEFAULT_KEY_NAME_VALUE = 'defaultPlatformKeyName';
     public const OPTION_DEFAULT_PUBLIC_KEY_PATH = 'defaultPublicKeyPath';
     public const OPTION_DEFAULT_PRIVATE_KEY_PATH = 'defaultPrivateKeyPath';
+    public const OPTION_DEFAULT_PRIVATE_KEY_PASSPHRASE = 'defaultPrivateKeyPassphrase';
     public const FILE_SYSTEM_ID = 'ltiKeyChain';
 
-    /**
-     * @throws ErrorException
-     */
-    public function save(KeyChainInterface $keyChain): void
+
+    public function saveDefaultKeyChain(KeyChainInterface $keyChain): void
     {
-        $isPublicKeySaved = $this->getFileSystem()
-            ->put(
-                ltrim($this->getOption(self::OPTION_DEFAULT_PUBLIC_KEY_PATH), DIRECTORY_SEPARATOR),
-                $keyChain->getPublicKey()->getContent()
-            );
+        $this->save($keyChain, $this->getDefaultKeyId());
+    }
 
-        $isPrivateKeySaved = $this->getFileSystem()
-            ->put(
-                ltrim($this->getOption(self::OPTION_DEFAULT_PRIVATE_KEY_PATH), DIRECTORY_SEPARATOR),
-                $keyChain->getPrivateKey()->getContent()
-            );
+    public function saveKeyChain(KeyChainInterface $keyChain): void
+    {
+        $this->save($keyChain, $keyChain->getIdentifier());
+    }
 
-        if (!$isPublicKeySaved || !$isPrivateKeySaved) {
-            throw new ErrorException('Impossible to write LTI keys');
+    protected function save(KeyChainInterface $keyChain, string $identifier): void
+    {
+        $configs = $this->findConfiguration($identifier);
+
+        if (empty($configs)) {
+            throw new PlatformKeyChainException('Impossible to write LTI keys. Configuration not found');
+        }
+
+        $publicKeyPath = $configs[self::OPTION_DEFAULT_PUBLIC_KEY_PATH] ?? null;
+        $privateKeyPath = $configs[self::OPTION_DEFAULT_PRIVATE_KEY_PATH] ?? null;
+
+        if ($publicKeyPath !== null && $privateKeyPath !== null) {
+            try {
+                $this->getFileSystem()
+                    ->write(
+                        ltrim($publicKeyPath, DIRECTORY_SEPARATOR),
+                        $keyChain->getPublicKey()->getContent()
+                    );
+
+                $this->getFileSystem()
+                    ->write(
+                        ltrim($privateKeyPath, DIRECTORY_SEPARATOR),
+                        $keyChain->getPrivateKey()->getContent()
+                    );
+            } catch (\Exception $e) {
+                throw new PlatformKeyChainException('Impossible to write LTI keys', 0, $e);
+            }
         }
     }
 
     public function getDefaultKeyId(): string
     {
-        return $this->getOption(PlatformKeyChainRepository::OPTION_DEFAULT_KEY_ID, '');
+        $options = $this->getOptions();
+        return reset($options)[self::OPTION_DEFAULT_KEY_ID] ?? '';
     }
 
-    /**
-     * @throws common_exception_NoImplementation
-     */
     public function find(string $identifier): ?KeyChainInterface
     {
-        if ($identifier !== $this->getDefaultKeyId()) {
+        $configs = $this->findConfiguration($identifier);
+
+        if (empty($configs)) {
             return null;
         }
 
-        $publicKey = $this->getFileSystem()
-            ->read($this->getOption(self::OPTION_DEFAULT_PUBLIC_KEY_PATH));
+        $keyName = $configs[self::OPTION_DEFAULT_KEY_NAME] ?? '';
+        $publicKeyPath = $configs[self::OPTION_DEFAULT_PUBLIC_KEY_PATH] ?? null;
+        $privateKeyPath = $configs[self::OPTION_DEFAULT_PRIVATE_KEY_PATH] ?? null;
+        $privateKeyPassphrase = $configs[self::OPTION_DEFAULT_PRIVATE_KEY_PASSPHRASE] ?? null;
 
-        $privateKey = $this->getFileSystem()
-            ->read($this->getOption(self::OPTION_DEFAULT_PRIVATE_KEY_PATH));
+        if (!$publicKeyPath || !$privateKeyPath) {
+            throw new PlatformKeyChainException('The key path is not defined');
+        }
+
+        $publicKey = $this->readKey($publicKeyPath);
+        $privateKey = $this->readKey($privateKeyPath);
 
         if ($publicKey === false || $privateKey === false) {
-            throw new ErrorException('Impossible to read LTI keys');
+            throw new PlatformKeyChainException('Impossible to read LTI keys');
         }
 
         return new KeyChain(
-            $this->getDefaultKeyId(),
-            $this->getOption(self::OPTION_DEFAULT_KEY_NAME),
+            $identifier,
+            $keyName,
             new Key($publicKey),
-            new Key($privateKey)
+            new Key($privateKey, $privateKeyPassphrase)
         );
     }
 
     public function findAll(KeyChainQuery $query): KeyChainCollection
     {
-        $publicKey = $this->getFileSystem()
-            ->read($this->getOption(self::OPTION_DEFAULT_PUBLIC_KEY_PATH));
+        $options = $this->getOptions();
+        foreach ($options as $configs) {
+            $defaultKeyId = $configs[self::OPTION_DEFAULT_KEY_ID] ?? null;
+            $defaultKeyName = $configs[self::OPTION_DEFAULT_KEY_NAME] ?? '';
+            $publicKeyPath = $configs[self::OPTION_DEFAULT_PUBLIC_KEY_PATH] ?? null;
+            $privateKeyPath = $configs[self::OPTION_DEFAULT_PRIVATE_KEY_PATH] ?? null;
+            $privateKeyPassphrase = $configs[self::OPTION_DEFAULT_PRIVATE_KEY_PASSPHRASE] ?? null;
 
-        $privateKey = $this->getFileSystem()
-            ->read($this->getOption(self::OPTION_DEFAULT_PRIVATE_KEY_PATH));
+            if ($defaultKeyId && $publicKeyPath && $privateKeyPath) {
+                $publicKey = $this->readKey($publicKeyPath);
+                $privateKey = $this->readKey($privateKeyPath);
 
-        if ($publicKey === false || $privateKey === false) {
-            throw new ErrorException('Impossible to read LTI keys');
+                $keyChains[] = new TaoKeyChain(
+                    $defaultKeyId,
+                    $defaultKeyName,
+                    new TaoKey($publicKey),
+                    new TaoKey($privateKey, $privateKeyPassphrase)
+                );
+            }
         }
 
-        $keyChain = new TaoKeyChain(
-            $this->getOption(self::OPTION_DEFAULT_KEY_ID),
-            $this->getOption(self::OPTION_DEFAULT_KEY_NAME),
-            new TaoKey($publicKey),
-            new TaoKey($privateKey)
-        );
+        if (empty($keyChains)) {
+            throw new PlatformKeyChainException('Impossible to read LTI keys');
+        }
 
-        return new KeyChainCollection($keyChain);
+        return new KeyChainCollection(...$keyChains);
     }
 
 
@@ -130,6 +167,15 @@ class PlatformKeyChainRepository extends ConfigurableService implements KeyChain
         throw new common_exception_NoImplementation();
     }
 
+    private function readKey(string $path): string
+    {
+        try {
+            return $this->getFileSystem()->read($path);
+        } catch (FilesystemException $e) {
+            throw new PlatformKeyChainException('Impossible to read LTI keys');
+        }
+    }
+
     private function getFileSystem(): FilesystemInterface
     {
         /** @var FileSystemService $fileSystemService */
@@ -137,5 +183,21 @@ class PlatformKeyChainRepository extends ConfigurableService implements KeyChain
             ->get(FileSystemService::SERVICE_ID);
 
         return $fileSystemService->getFileSystem(self::FILE_SYSTEM_ID);
+    }
+
+    /**
+     * @param string $identifier
+     * @return array|null
+     */
+    public function findConfiguration(string $identifier): ?array
+    {
+        $options = $this->getOptions();
+        foreach ($options as $configs) {
+            if ($configs[self::OPTION_DEFAULT_KEY_ID] === $identifier) {
+                return $configs;
+            }
+        }
+
+        return null;
     }
 }

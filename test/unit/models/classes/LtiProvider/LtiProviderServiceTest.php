@@ -23,6 +23,7 @@ declare(strict_types=1);
 namespace oat\taoLti\test\unit\models\classes\LtiProvider;
 
 use oat\generis\test\MockObject;
+use oat\generis\test\ServiceManagerMockTrait;
 use oat\generis\test\TestCase;
 use oat\taoLti\models\classes\LtiProvider\LtiProvider;
 use oat\taoLti\models\classes\LtiProvider\LtiProviderRepositoryInterface;
@@ -30,6 +31,8 @@ use oat\taoLti\models\classes\LtiProvider\LtiProviderService;
 
 class LtiProviderServiceTest extends TestCase
 {
+    use ServiceManagerMockTrait;
+
     /** @var LtiProviderService */
     private $subject;
 
@@ -52,6 +55,25 @@ class LtiProviderServiceTest extends TestCase
                 ],
             ]
         );
+    }
+
+    public function testImplementationDefinedAsArray(): void
+    {
+        $serviceManagerMock = $this->getServiceManagerMock();
+        $serviceManagerMock->expects($this->once())
+            ->method('build')->willReturn($this->repository1);
+        $service = new LtiProviderService(
+            [
+                LtiProviderService::LTI_PROVIDER_LIST_IMPLEMENTATIONS => [
+                    [
+                        'class' => LtiProviderService::class,
+                        'options' => [],
+                    ],
+                ],
+            ]
+        );
+        $service->setServiceManager($serviceManagerMock);
+        $service->count();
     }
     public function testCount(): void
     {
@@ -97,12 +119,12 @@ class LtiProviderServiceTest extends TestCase
 
         $this->expectsFindAll($this->repository1, [$provider]);
         $this->expectsFindAll($this->repository2, [$provider2]);
-        
+
         $provider
             ->expects($this->once())
             ->method('getToolClientId')
             ->willReturn('client_id');
-        
+
         $this->subject->searchByToolClientId('client_id');
     }
 
@@ -155,8 +177,11 @@ class LtiProviderServiceTest extends TestCase
     /**
      * @param LtiProviderRepositoryInterface|MockObject $repository
      */
-    private function expectsSearchByLabel(LtiProviderRepositoryInterface $repository, string $label, array $result): void
-    {
+    private function expectsSearchByLabel(
+        LtiProviderRepositoryInterface $repository,
+        string $label,
+        array $result
+    ): void {
         $repository->method('searchByLabel')
             ->with($label)
             ->willReturn($result);
@@ -165,8 +190,11 @@ class LtiProviderServiceTest extends TestCase
     /**
      * @param LtiProviderRepositoryInterface|MockObject $repository
      */
-    private function expectsSearchById(LtiProviderRepositoryInterface $repository, string $id, ?LtiProvider $result): void
-    {
+    private function expectsSearchById(
+        LtiProviderRepositoryInterface $repository,
+        string $id,
+        ?LtiProvider $result
+    ): void {
         $repository
             ->method('searchById')
             ->with($id)
@@ -176,8 +204,11 @@ class LtiProviderServiceTest extends TestCase
     /**
      * @param LtiProviderRepositoryInterface|MockObject $repository
      */
-    private function expectsSearchByOauthKey(LtiProviderRepositoryInterface $repository, string $oauthKey, ?LtiProvider $result): void
-    {
+    private function expectsSearchByOauthKey(
+        LtiProviderRepositoryInterface $repository,
+        string $oauthKey,
+        ?LtiProvider $result
+    ): void {
         $repository
             ->method('searchByOauthKey')
             ->with($oauthKey)

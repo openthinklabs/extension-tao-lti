@@ -22,23 +22,31 @@ declare(strict_types=1);
 
 namespace oat\taoLti\test\unit\models\classes\Security\DataAccess\Repository;
 
-use ErrorException;
-use oat\generis\test\TestCase;
+use League\Flysystem\UnableToReadFile;
+use League\Flysystem\UnableToWriteFile;
+use oat\generis\test\ServiceManagerMockTrait;
 use OAT\Library\Lti1p3Core\Security\Key\Key;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChain;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChainInterface;
+use OAT\Library\Lti1p3Core\Security\Key\KeyInterface;
 use oat\oatbox\filesystem\FileSystem;
 use oat\oatbox\filesystem\FileSystemService;
+use oat\tao\model\security\Business\Domain\Key\KeyChainQuery;
+use oat\taoLti\models\classes\Exception\PlatformKeyChainException;
 use oat\taoLti\models\classes\Security\DataAccess\Repository\PlatformKeyChainRepository;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\TestCase;
+use oat\tao\model\security\Business\Domain\Key\Key as TaoKey;
 
 class PlatformKeyChainRepositoryTest extends TestCase
 {
+    use ServiceManagerMockTrait;
+
     /** @var PlatformKeyChainRepository */
-    private $subject;
+    private PlatformKeyChainRepository $subject;
 
     /** @var FileSystem|MockObject */
-    private $fileSystem;
+    private FileSystem $fileSystem;
 
     public function setUp(): void
     {
@@ -48,16 +56,28 @@ class PlatformKeyChainRepositoryTest extends TestCase
         $fileSystem->method('getFileSystem')
             ->willReturn($this->fileSystem);
 
-        $this->subject = new PlatformKeyChainRepository(
+        $this->subject = new PlatformKeyChainRepository([
             [
                 PlatformKeyChainRepository::OPTION_DEFAULT_KEY_ID => 'keyId',
                 PlatformKeyChainRepository::OPTION_DEFAULT_KEY_NAME => 'keyName',
+                PlatformKeyChainRepository::OPTION_DEFAULT_PUBLIC_KEY_PATH => 'publicPath',
+                PlatformKeyChainRepository::OPTION_DEFAULT_PRIVATE_KEY_PATH => 'privatePath',
+            ],
+            [
+                PlatformKeyChainRepository::OPTION_DEFAULT_KEY_ID => 'keyId2',
+                PlatformKeyChainRepository::OPTION_DEFAULT_KEY_NAME => 'keyName2',
+                PlatformKeyChainRepository::OPTION_DEFAULT_PUBLIC_KEY_PATH => 'publicPath',
+                PlatformKeyChainRepository::OPTION_DEFAULT_PRIVATE_KEY_PATH => 'privatePath',
+            ],
+            [
+                PlatformKeyChainRepository::OPTION_DEFAULT_KEY_ID => 'keyId3',
+                PlatformKeyChainRepository::OPTION_DEFAULT_KEY_NAME => 'keyName3',
                 PlatformKeyChainRepository::OPTION_DEFAULT_PUBLIC_KEY_PATH => '',
                 PlatformKeyChainRepository::OPTION_DEFAULT_PRIVATE_KEY_PATH => '',
             ]
-        );
+        ]);
         $this->subject->setServiceLocator(
-            $this->getServiceLocatorMock(
+            $this->getServiceManagerMock(
                 [
                     FileSystemService::SERVICE_ID => $fileSystem
                 ]
@@ -74,54 +94,80 @@ class PlatformKeyChainRepositoryTest extends TestCase
                 'privateKey'
             );
 
-        $keyChain = $this->subject->find('keyId');
+        $keyChain = $this->subject->find('keyId2');
 
         $this->assertInstanceOf(KeyChainInterface::class, $keyChain);
-        $this->assertEquals(
-            $keyChain = new KeyChain(
-                'keyId',
-                'keyName',
-                new Key('publicKey'),
-                new Key('privateKey')
-            ),
-            $keyChain
-        );
+        $this->assertEquals('keyId2', $keyChain->getIdentifier());
+        $this->assertEquals('keyName2', $keyChain->getKeySetName());
+        $this->assertInstanceOf(KeyInterface::class, $keyChain->getPublicKey());
+        $this->assertInstanceOf(KeyInterface::class, $keyChain->getPrivateKey());
+    }
+
+    public function testFindAll(): void
+    {
+        $this->fileSystem
+            ->method('read')
+            ->willReturnOnConsecutiveCalls(
+                'publicKey',
+                'privateKey',
+                'publicKey',
+                'privateKey',
+                '',
+                ''
+            );
+
+        $keyChains = $this->subject->findAll(new KeyChainQuery())->getKeyChains();
+
+        $this->assertIsArray($keyChains);
+        $this->assertCount(2, $keyChains);
+        $keyChain = $keyChains[1];
+        $this->assertEquals('keyId2', $keyChain->getIdentifier());
+        $this->assertEquals('keyName2', $keyChain->getName());
+        $this->assertInstanceOf(TaoKey::class, $keyChain->getPublicKey());
+        $this->assertInstanceOf(TaoKey::class, $keyChain->getPrivateKey());
     }
 
     public function testFindFails(): void
     {
         $this->fileSystem
             ->method('read')
-            ->willReturn(false);
+            ->willThrowException(new UnableToReadFile());
 
         $keyChain = $this->subject->find('');
 
         $this->assertNull($keyChain);
     }
 
-    public function testSave(): void
+    public function testFindWithEmptyPathFails(): void
+    {
+        $this->expectException(PlatformKeyChainException::class);
+        $this->expectExceptionMessage('The key path is not defined');
+
+        $this->subject->find('keyId3');
+    }
+
+    public function testSaveDefaultKeyChain(): void
     {
         $this->fileSystem
-            ->method('put')
-            ->willReturn(true);
+            ->method('write');
 
-        $this->subject->save(
-            new KeyChain('', '', new Key(''), new Key(''))
+        $this->subject->saveDefaultKeyChain(
+            new KeyChain('keyId', '', new Key(''), new Key(''))
         );
 
         $this->expectNotToPerformAssertions();
     }
 
-    public function testSaveFails(): void
+    public function testSaveDefaultKeyChainFails(): void
     {
         $this->fileSystem
-            ->method('put')
-            ->willReturn(false);
+            ->method('write')
+            ->willThrowException(new UnableToWriteFile());
 
-        $this->expectException(ErrorException::class);
+        $this->expectException(PlatformKeyChainException::class);
         $this->expectExceptionMessage('Impossible to write LTI keys');
 
-        $this->subject->save(new KeyChain('', '', new Key(''), new Key('')));
+        $this->subject->saveDefaultKeyChain(new KeyChain('', '', new Key(''), new Key('')));
     }
 
     public function testGetDefaultKeyId(): void

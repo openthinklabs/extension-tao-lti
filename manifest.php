@@ -23,11 +23,14 @@ use oat\tao\model\accessControl\func\AccessRule;
 use oat\tao\model\user\TaoRoles;
 use oat\taoLti\controller\CookieUtils;
 use oat\taoLti\controller\Security;
+use oat\taoLti\models\classes\LtiRoles;
 use oat\taoLti\models\classes\ServiceProvider\LtiServiceProvider;
+use oat\taoLti\scripts\install\CreateLti1p3RegistrationSnapshotSchema;
 use oat\taoLti\scripts\install\GenerateKeys;
-use oat\taoLti\scripts\install\InstallServices;
-use oat\taoLti\scripts\install\MapLtiSectionVisibility;
 use oat\taoLti\scripts\install\GenerisSearchWhitelist;
+use oat\taoLti\scripts\install\RegisterPortalThemeDetailProvider;
+use oat\taoLti\scripts\install\SetupServices;
+use oat\taoLti\scripts\install\MapLtiSectionVisibility;
 use oat\taoLti\scripts\update\Updater;
 
 /**
@@ -57,10 +60,12 @@ return [
             $extpath . 'install/ontology/ltiroles_membership.rdf'
         ],
         'php' => [
-            InstallServices::class,
+            SetupServices::class,
             GenerateKeys::class,
             MapLtiSectionVisibility::class,
-            GenerisSearchWhitelist::class
+            GenerisSearchWhitelist::class,
+            CreateLti1p3RegistrationSnapshotSchema::class,
+            RegisterPortalThemeDetailProvider::class,
         ]
     ],
     'update' => Updater::class,
@@ -70,6 +75,22 @@ return [
         [AccessRule::GRANT, TaoRoles::ANONYMOUS, CookieUtils::class],
         [AccessRule::GRANT, TaoRoles::BASE_USER, ['ext' => 'taoLti','mod' => 'LtiConsumer', 'act' => 'call']],
         [AccessRule::GRANT, TaoRoles::ANONYMOUS, Security::class],
+        [AccessRule::GRANT, TaoRoles::ANONYMOUS, ['ext' => 'taoLti', 'mod' => 'AuthoringTool', 'act' => 'launch']],
+        [
+            AccessRule::GRANT,
+            LtiRoles::CONTEXT_LTI1P3_CONTENT_DEVELOPER_SUB_CONTENT_DEVELOPER,
+            ['ext' => 'taoLti', 'mod' => 'AuthoringTool', 'act' => 'run']
+        ],
+        [
+            AccessRule::GRANT,
+            LtiRoles::CONTEXT_LTI1P3_ADMINISTRATOR_SUB_DEVELOPER,
+            ['ext' => 'taoLti', 'mod' => 'AuthoringTool', 'act' => 'run']
+        ],
+        [
+            AccessRule::GRANT,
+            LtiRoles::CONTEXT_LTI1P3_CONTENT_DEVELOPER_SUB_CONTENT_EXPERT,
+            ['ext' => 'taoLti', 'mod' => 'AuthoringTool', 'act' => 'run']
+        ],
     ],
     'constants' => [
         # controller directory

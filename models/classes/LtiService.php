@@ -25,7 +25,10 @@ use common_exception_Error;
 use common_http_Request;
 use common_session_SessionManager;
 use core_kernel_classes_Class;
+use core_kernel_classes_Property;
 use core_kernel_classes_Resource;
+use oat\generis\model\GenerisRdf;
+use OAT\Library\Lti1p3Core\Message\Payload\Claim\LaunchPresentationClaim;
 use OAT\Library\Lti1p3Core\Message\Payload\LtiMessagePayloadInterface;
 use OAT\Library\Lti1p3Core\Message\Payload\MessagePayloadInterface;
 use OAT\Library\Lti1p3Core\Registration\RegistrationRepositoryInterface;
@@ -33,18 +36,20 @@ use oat\oatbox\log\LoggerService;
 use oat\oatbox\service\ConfigurableService;
 use oat\oatbox\service\ServiceManager;
 use oat\oatbox\session\SessionService;
+use oat\tao\model\session\Context\TenantDataSessionContext;
+use oat\tao\model\session\Context\UserDataSessionContext;
 use oat\tao\model\TaoOntology;
 use oat\taoLti\models\classes\LtiMessages\LtiErrorMessage;
-use oat\taoLti\models\classes\Platform\Repository\Lti1p3RegistrationRepository;
-use oat\taoLti\models\classes\Platform\Repository\LtiPlatformRepositoryInterface;
 use oat\taoLti\models\classes\user\Lti1p3User;
 use Psr\Log\LogLevel;
 
 class LtiService extends ConfigurableService
 {
-    const LIS_CONTEXT_ROLE_NAMESPACE = 'urn:lti:role:ims/lis/';
+    public const LIS_CONTEXT_ROLE_NAMESPACE = 'urn:lti:role:ims/lis/';
 
-    const LTICONTEXT_SESSION_KEY = 'LTICONTEXT';
+    public const LTICONTEXT_SESSION_KEY = 'LTICONTEXT';
+
+    public const DEFAULT_USER_EXTENSION = 'tao/Main/index?structure=items&ext=taoItems';
 
     public function createLtiSession(common_http_Request $request)
     {
@@ -67,8 +72,10 @@ class LtiService extends ConfigurableService
         }
     }
 
-    public function createLti1p3Session(LtiMessagePayloadInterface $messagePayload)
-    {
+    public function createLti1p3Session(
+        LtiMessagePayloadInterface $messagePayload,
+        core_kernel_classes_Resource $user = null
+    ) {
         try {
             /** @var RegistrationRepositoryInterface $registrationRepository */
             $registrationRepository = $this->getServiceLocator()
@@ -87,15 +94,47 @@ class LtiService extends ConfigurableService
                 );
             }
 
-            $user = new Lti1p3User(
-                LtiLaunchData::fromLti1p3MessagePayload($messagePayload, $registration->getPlatform())
+            $ltiUser = new Lti1p3User(
+                LtiLaunchData::fromLti1p3MessagePayload($messagePayload, $registration->getPlatform()),
+                $user ? $user->getUri() : null
             );
 
-            $user->setRegistrationId($registration->getIdentifier());
+            if ($user !== null) {
+                $userLatestExtension = new core_kernel_classes_Property(TaoOntology::PROPERTY_USER_LAST_EXTENSION);
 
-            $session = TaoLtiSession::fromVersion1p3($user);
+                //do not consider lti users with UserFirstTime as true because they should not see the help modal
+                $ltiUser->setUserFirstTimeUri(GenerisRdf::GENERIS_FALSE);
+                $ltiUser->setUserLatestExtension(self::DEFAULT_USER_EXTENSION);
+
+
+                $userLatestExtensionValue = (string)$user->getOnePropertyValue($userLatestExtension);
+                if (!empty($userLatestExtensionValue)) {
+                    $ltiUser->setUserLatestExtension($userLatestExtensionValue);
+                }
+            }
+
+            $ltiUser->setRegistrationId($registration->getIdentifier());
+
+            $contexts = [];
+            if ($clientId) {
+                $userId = $messagePayload->getUserIdentity();
+                $clientIdParts = explode('-', $clientId);
+                $contexts = [
+                    new UserDataSessionContext(
+                        $userId->getIdentifier(),
+                        $userId->getIdentifier(),
+                        $userId->getName(),
+                        $userId->getEmail(),
+                        $userId->getLocale() ?? $this->getLocaleFromMessagePayload($messagePayload)
+                    ),
+                    new TenantDataSessionContext(end($clientIdParts))
+                ];
+            }
+
+            $session = TaoLtiSession::fromVersion1p3($ltiUser, $contexts);
 
             $this->getServiceLocator()->propagate($session);
+
 
             return $session;
         } catch (LtiInvalidVariableException $e) {
@@ -122,10 +161,12 @@ class LtiService extends ConfigurableService
         $this->getServiceLocator()->get(SessionService::SERVICE_ID)->setSession($this->createLtiSession($request));
     }
 
-    public function startLti1p3Session(LtiMessagePayloadInterface $messagePayload)
-    {
+    public function startLti1p3Session(
+        LtiMessagePayloadInterface $messagePayload,
+        core_kernel_classes_Resource $user = null
+    ) {
         $this->getServiceLocator()->get(SessionService::SERVICE_ID)->setSession(
-            $this->createLti1p3Session($messagePayload)
+            $this->createLti1p3Session($messagePayload, $user)
         );
     }
 
@@ -140,7 +181,7 @@ class LtiService extends ConfigurableService
     {
         $session = common_session_SessionManager::getSession();
         if (!$session instanceof TaoLtiSession) {
-            throw new LtiException(__FUNCTION__.' called on a non LTI session', LtiErrorMessage::ERROR_SYSTEM_ERROR);
+            throw new LtiException(__FUNCTION__ . ' called on a non LTI session', LtiErrorMessage::ERROR_SYSTEM_ERROR);
         }
         $this->getServiceLocator()->propagate($session);
 
@@ -157,11 +198,11 @@ class LtiService extends ConfigurableService
         $class = new core_kernel_classes_Class(ConsumerService::CLASS_URI);
         $instances = $class->searchInstances([TaoOntology::PROPERTY_OAUTH_KEY => $key], ['like' => false]);
         if (count($instances) == 0) {
-            throw new LtiException('No Credentials for consumer key '.$key, LtiErrorMessage::ERROR_UNAUTHORIZED);
+            throw new LtiException('No Credentials for consumer key ' . $key, LtiErrorMessage::ERROR_UNAUTHORIZED);
         }
         if (count($instances) > 1) {
             throw new LtiException(
-                'Multiple Credentials for consumer key '.$key,
+                'Multiple Credentials for consumer key ' . $key,
                 LtiErrorMessage::ERROR_INVALID_PARAMETER
             );
         }
@@ -191,5 +232,14 @@ class LtiService extends ConfigurableService
     public static function singleton()
     {
         return ServiceManager::getServiceManager()->get(static::class);
+    }
+
+    private function getLocaleFromMessagePayload(LtiMessagePayloadInterface $messagePayload): ?string
+    {
+        if ($messagePayload && $messagePayload->getLaunchPresentation() instanceof LaunchPresentationClaim) {
+            return $messagePayload->getLaunchPresentation()->getLocale();
+        }
+
+        return null;
     }
 }

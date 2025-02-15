@@ -23,7 +23,7 @@ declare(strict_types=1);
 namespace oat\taoLti\models\classes\Platform\Service\Oidc;
 
 use ErrorException;
-use oat\generis\model\GenerisRdf;
+use oat\generis\model\user\UserRdf;
 use OAT\Library\Lti1p3Core\Registration\RegistrationInterface;
 use OAT\Library\Lti1p3Core\Security\User\Result\UserAuthenticationResult;
 use OAT\Library\Lti1p3Core\Security\User\Result\UserAuthenticationResultInterface;
@@ -36,8 +36,10 @@ use Throwable;
 
 class Lti1p3UserAuthenticator extends ConfigurableService implements UserAuthenticatorInterface
 {
-    public function authenticate(RegistrationInterface $registration, string $loginHint): UserAuthenticationResultInterface
-    {
+    public function authenticate(
+        RegistrationInterface $registration,
+        string $loginHint
+    ): UserAuthenticationResultInterface {
         try {
             return new UserAuthenticationResult(true, $this->getUserIdentity($loginHint));
         } catch (Throwable $exception) {
@@ -48,8 +50,13 @@ class Lti1p3UserAuthenticator extends ConfigurableService implements UserAuthent
     /**
      * @throws ErrorException
      */
-    private function getUserIdentity(string $userId): UserIdentity
+    private function getUserIdentity(string $userId): ?UserIdentity
     {
+        // anonymous user without login data
+        if ($userId === '') {
+            return null;
+        }
+
         $user = $this->getUserService()
             ->getUser($userId);
 
@@ -57,12 +64,24 @@ class Lti1p3UserAuthenticator extends ConfigurableService implements UserAuthent
             throw new ErrorException(sprintf('User [%s] not found', $userId));
         }
 
-        $fullName = (string)($user->getPropertyValues(GenerisRdf::PROPERTY_USER_FIRSTNAME)[0] ?? null)
-            . ' ' . (string)($user->getPropertyValues(GenerisRdf::PROPERTY_USER_LASTNAME)[0] ?? null);
+        $login = $this->getPropertyValue($user, UserRdf::PROPERTY_LOGIN);
+        $login = empty($login) ? $userId : $login;
 
-        $email = (string)($user->getPropertyValues(GenerisRdf::PROPERTY_USER_MAIL)[0] ?? null);
+        $firstName = $this->getPropertyValue($user, UserRdf::PROPERTY_FIRSTNAME);
+        $lastName = $this->getPropertyValue($user, UserRdf::PROPERTY_LASTNAME);
 
-        return new UserIdentity($userId, $fullName, $email);
+        $fullName = "$firstName $lastName";
+
+        $email = $this->getPropertyValue($user, UserRdf::PROPERTY_MAIL);
+
+        $locale = $this->getPropertyValue($user, UserRdf::PROPERTY_DEFLG);
+
+        return new UserIdentity($login, trim($fullName), $email, $firstName, $lastName, null, $locale);
+    }
+
+    private function getPropertyValue(User $user, string $propertyName): ?string
+    {
+        return $user->getPropertyValues($propertyName)[0] ?? null;
     }
 
     private function getUserService(): UserService

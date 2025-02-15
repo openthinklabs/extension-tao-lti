@@ -23,29 +23,30 @@ declare(strict_types=1);
 namespace oat\taoLti\test\unit\models\classes\Security\DataAccess\Repository;
 
 use oat\generis\test\MockObject;
-use oat\generis\test\TestCase;
+use oat\generis\test\ServiceManagerMockTrait;
 use OAT\Library\Lti1p3Core\Security\Key\Key;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChain;
 use OAT\Library\Lti1p3Core\Security\Key\KeyChainInterface;
 use oat\oatbox\cache\SimpleCache;
-use oat\tao\model\security\Business\Domain\Key\KeyChainCollection;
-use oat\tao\model\security\Business\Domain\Key\KeyChainQuery;
 use oat\taoLti\models\classes\Security\DataAccess\Repository\CachedPlatformKeyChainRepository;
 use oat\taoLti\models\classes\Security\DataAccess\Repository\PlatformKeyChainRepository;
+use PHPUnit\Framework\TestCase;
 
 class CachedPlatformKeyChainRepositoryTest extends TestCase
 {
+    use ServiceManagerMockTrait;
+
     private const KEY_CHAIN_ID = 'id';
     private const KEY_CHAIN_NAME = 'name';
 
     /** @var CachedPlatformKeyChainRepository */
-    private $subject;
+    private CachedPlatformKeyChainRepository $subject;
 
     /** @var SimpleCache|MockObject */
-    private $cache;
+    private SimpleCache $cache;
 
     /** @var PlatformKeyChainRepository|MockObject */
-    private $platformKeyChainRepository;
+    private PlatformKeyChainRepository $platformKeyChainRepository;
 
     public function setUp(): void
     {
@@ -70,7 +71,7 @@ class CachedPlatformKeyChainRepositoryTest extends TestCase
             );
 
         $this->subject->setServiceLocator(
-            $this->getServiceLocatorMock(
+            $this->getServiceManagerMock(
                 [
                     SimpleCache::SERVICE_ID => $this->cache,
                     PlatformKeyChainRepository::SERVICE_ID => $this->platformKeyChainRepository,
@@ -87,15 +88,21 @@ class CachedPlatformKeyChainRepositoryTest extends TestCase
             ->expects($this->exactly(2))
             ->method('set')
             ->withConsecutive(
-                [sprintf(CachedPlatformKeyChainRepository::PRIVATE_PATTERN, self::KEY_CHAIN_ID), $keyChain->getPrivateKey()->getContent()],
-                [sprintf(CachedPlatformKeyChainRepository::PUBLIC_PATTERN, self::KEY_CHAIN_ID), $keyChain->getPublicKey()->getContent()]
+                [
+                    sprintf(CachedPlatformKeyChainRepository::PRIVATE_PATTERN, self::KEY_CHAIN_ID),
+                    $keyChain->getPrivateKey()->getContent(),
+                ],
+                [
+                    sprintf(CachedPlatformKeyChainRepository::PUBLIC_PATTERN, self::KEY_CHAIN_ID),
+                    $keyChain->getPublicKey()->getContent(),
+                ],
             );
 
         $this->platformKeyChainRepository
             ->expects($this->once())
-            ->method('save');
+            ->method('saveDefaultKeyChain');
 
-        $this->subject->save($keyChain);
+        $this->subject->saveDefaultKeyChain($keyChain);
     }
 
     public function testFindWhenCacheEmpty(): void
@@ -117,8 +124,14 @@ class CachedPlatformKeyChainRepositoryTest extends TestCase
             ->expects($this->exactly(2))
             ->method('set')
             ->withConsecutive(
-                [sprintf(CachedPlatformKeyChainRepository::PRIVATE_PATTERN, self::KEY_CHAIN_ID), $keyChain->getPrivateKey()->getContent()],
-                [sprintf(CachedPlatformKeyChainRepository::PUBLIC_PATTERN, self::KEY_CHAIN_ID), $keyChain->getPublicKey()->getContent()]
+                [
+                    sprintf(CachedPlatformKeyChainRepository::PRIVATE_PATTERN, self::KEY_CHAIN_ID),
+                    $keyChain->getPrivateKey()->getContent(),
+                ],
+                [
+                    sprintf(CachedPlatformKeyChainRepository::PUBLIC_PATTERN, self::KEY_CHAIN_ID),
+                    $keyChain->getPublicKey()->getContent(),
+                ]
             );
 
         $this->platformKeyChainRepository
@@ -130,7 +143,9 @@ class CachedPlatformKeyChainRepositoryTest extends TestCase
 
         $this->assertSame(self::KEY_CHAIN_ID, $keyChain->getIdentifier());
         $this->assertSame('privateKey', $keyChain->getPrivateKey()->getContent());
+        $this->assertSame('pass', $keyChain->getPrivateKey()->getPassPhrase());
         $this->assertSame('publicKey', $keyChain->getPublicKey()->getContent());
+        $this->assertNull($keyChain->getPublicKey()->getPassPhrase());
     }
 
     public function testFind(): void
@@ -161,6 +176,11 @@ class CachedPlatformKeyChainRepositoryTest extends TestCase
                 ]
             );
 
+        $this->platformKeyChainRepository
+            ->expects($this->once())
+            ->method('findConfiguration')
+            ->willReturn([PlatformKeyChainRepository::OPTION_DEFAULT_KEY_ID => self::KEY_CHAIN_ID]);
+
         $keyChain = $this->subject->find(self::KEY_CHAIN_ID);
 
         $this->assertSame(self::KEY_CHAIN_ID, $keyChain->getIdentifier());
@@ -174,7 +194,7 @@ class CachedPlatformKeyChainRepositoryTest extends TestCase
             self::KEY_CHAIN_ID,
             self::KEY_CHAIN_NAME,
             new Key('publicKey'),
-            new Key('privateKey')
+            new Key('privateKey', 'pass')
         );
     }
 }

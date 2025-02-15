@@ -47,9 +47,15 @@ use OAT\Library\Lti1p3Core\Service\Client\LtiServiceClientInterface;
 use oat\oatbox\cache\factory\CacheItemPoolFactory;
 use oat\oatbox\cache\ItemPoolSimpleCacheAdapter;
 use oat\oatbox\log\LoggerService;
+use oat\oatbox\session\SessionService;
+use oat\tao\model\DynamicConfig\DynamicConfigProviderInterface;
+use oat\tao\model\accessControl\RoleBasedContextRestrictAccess;
+use oat\tao\model\menu\SectionVisibilityByRoleFilter;
 use oat\taoLti\models\classes\Client\LtiClientFactory;
+use oat\taoLti\models\classes\DynamicConfig\LtiConfigProvider;
 use oat\taoLti\models\classes\LtiAgs\LtiAgsScoreService;
 use oat\taoLti\models\classes\LtiAgs\LtiAgsScoreServiceInterface;
+use oat\taoLti\models\classes\LtiRoles;
 use oat\taoLti\models\classes\Platform\Repository\DefaultToolConfig;
 use oat\taoLti\models\classes\Platform\Repository\Lti1p3RegistrationRepository;
 use oat\taoLti\models\classes\Platform\Repository\Lti1p3RegistrationSnapshotRepository;
@@ -57,16 +63,26 @@ use oat\taoLti\models\classes\Platform\Repository\LtiPlatformFactory;
 use oat\taoLti\models\classes\Platform\Service\UpdatePlatformRegistrationSnapshotListener;
 use oat\taoLti\models\classes\Security\DataAccess\Repository\CachedPlatformKeyChainRepository;
 use oat\taoLti\models\classes\Security\DataAccess\Repository\PlatformKeyChainRepository;
+use oat\taoLti\models\classes\Tool\Service\AuthoringLtiRoleService;
+use oat\taoLti\models\classes\Tool\Validation\AuthoringToolValidator;
+use oat\taoLti\models\classes\Tool\Validation\Lti1p3Validator;
 use Psr\Cache\CacheItemPoolInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
-use function Symfony\Component\DependencyInjection\Loader\Configurator\inline_service;
-use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\env;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\inline_service;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 class LtiServiceProvider implements ContainerServiceProviderInterface
 {
+    private const PORTAL_ACCESS_ROLES = [
+        LtiRoles::CONTEXT_LTI1P3_ADMINISTRATOR_SUB_DEVELOPER,
+        LtiRoles::CONTEXT_LTI1P3_CONTENT_DEVELOPER_SUB_CONTENT_DEVELOPER,
+        LtiRoles::CONTEXT_LTI1P3_CONTENT_DEVELOPER_SUB_CONTENT_EXPERT,
+        LTIRoles::CONTEXT_INSTITUTION_LTI1P3_ADMINISTRATOR,
+        LtiRoles::CONTEXT_LTI1P3_INSTRUCTOR
+    ];
     public function __invoke(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -75,6 +91,20 @@ class LtiServiceProvider implements ContainerServiceProviderInterface
         $parameters->set(
             'defaultScope',
             $_ENV['LTI_DEFAULT_SCOPE'] ?? 'https://purl.imsglobal.org/spec/lti-bo/scope/basicoutcome'
+        );
+
+        $parameters->set(
+            'rolesAllowed',
+            self::PORTAL_ACCESS_ROLES
+        );
+
+        $parameters->set(
+            'restrictedRolesForSectionMap',
+            [
+                'help' => self::PORTAL_ACCESS_ROLES,
+                'settings_my_password' => self::PORTAL_ACCESS_ROLES,
+                'settings_my_settings' => self::PORTAL_ACCESS_ROLES
+            ]
         );
 
         $services
@@ -203,6 +233,68 @@ class LtiServiceProvider implements ContainerServiceProviderInterface
                 [
                     service(RegistrationRepositoryInterface::class),
                     service(LtiPlatformFactory::class)
+                ]
+            );
+
+        $services
+            ->set(Lti1p3Validator::class, Lti1p3Validator::class)
+            ->public()
+            ->args(
+                [
+                    service(RegistrationRepositoryInterface::class),
+                    service(ItemPoolSimpleCacheAdapter::class)
+                ]
+            );
+
+
+        $services
+            ->set(AuthoringToolValidator::class, AuthoringToolValidator::class)
+            ->public()
+            ->args(
+                [
+                    service(RegistrationRepositoryInterface::class),
+                ]
+            );
+
+        $services
+            ->set(Lti1p3Validator::class . 'Authoring', Lti1p3Validator::class)
+            ->public()
+            ->args(
+                [
+                    service(RegistrationRepositoryInterface::class),
+                    service(ItemPoolSimpleCacheAdapter::class),
+                    service(AuthoringToolValidator::class),
+                ]
+            );
+
+        $services
+            ->set(AuthoringLtiRoleService::class, AuthoringLtiRoleService::class)
+            ->public()
+            ->args(
+                [
+                    param('rolesAllowed')
+                ]
+            );
+
+        $services
+            ->get(RoleBasedContextRestrictAccess::class)
+            ->arg('$restrictedRoles', [
+                'ltiAuthoringLaunchRestrictRoles' => param('rolesAllowed')
+            ]);
+
+        $services->set(SectionVisibilityByRoleFilter::class, SectionVisibilityByRoleFilter::class)
+            ->public()
+            ->args([param('restrictedRolesForSectionMap')]);
+
+        $services
+            ->set(LtiConfigProvider::class)
+            ->decorate(DynamicConfigProviderInterface::class)
+            ->public()
+            ->args(
+                [
+                    service(LtiConfigProvider::class . '.inner'),
+                    service(SessionService::SERVICE_ID),
+                    service(LoggerService::SERVICE_ID),
                 ]
             );
     }
