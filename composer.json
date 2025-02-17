@@ -59,7 +59,7 @@
         "ext-openssl": "*",
         "guzzlehttp/guzzle": "^6.5 || ^7.0",
         "openthinklabs/oatbox-extension-installer": "dev-master",
-        "openthinklabs/lib-lti1p3-ags": "dev-master",
+        "openthinklabs/lib-lti1p3-ags": "dev-main",
         "openthinklabs/lib-lti1p3-core": "dev-master",
         "openthinklabs/generis": "dev-master",
         "openthinklabs/tao-core": "dev-master"
