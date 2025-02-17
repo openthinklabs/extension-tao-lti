@@ -58,11 +58,11 @@
         "php": "~8",
         "ext-openssl": "*",
         "guzzlehttp/guzzle": "^6.5 || ^7.0",
-        "oat-sa/oatbox-extension-installer": "~1.1||dev-master",
-        "oat-sa/lib-lti1p3-ags": "~2",
-        "oat-sa/lib-lti1p3-core": "~7.2",
-        "oat-sa/generis": ">=16.0.0",
-        "oat-sa/tao-core": ">=54.26.0"
+        "openthinklabs/oatbox-extension-installer": "dev-master",
+        "openthinklabs/lib-lti1p3-ags": "dev-master",
+        "openthinklabs/lib-lti1p3-core": "dev-master",
+        "openthinklabs/generis": "dev-master",
+        "openthinklabs/tao-core": "dev-master"
     },
     "autoload" : {
         "psr-4" : {
